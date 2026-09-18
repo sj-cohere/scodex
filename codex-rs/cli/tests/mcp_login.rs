@@ -80,7 +80,7 @@ impl Fixture {
     }
 
     async fn start(&self) -> Result<Login> {
-        let mut child = Command::new(codex_utils_cargo_bin::cargo_bin("codex")?)
+        let mut child = Command::new(codex_utils_cargo_bin::cargo_bin("scodex")?)
             .kill_on_drop(true)
             .current_dir(self.home.path())
             .env("CODEX_HOME", self.home.path())

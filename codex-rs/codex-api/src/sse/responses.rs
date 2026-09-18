@@ -1,3 +1,4 @@
+use super::response_reconstruction::CompletedMessageReconstructor;
 use crate::common::ResponseEvent;
 use crate::common::ResponseStream;
 use crate::common::SafetyBuffering;
@@ -140,12 +141,12 @@ impl From<ResponseCompletedUsage> for TokenUsage {
         let input_tokens_details = val.input_tokens_details.unwrap_or_default();
         TokenUsage {
             input_tokens: val.input_tokens,
-            cached_input_tokens: input_tokens_details.cached_tokens,
-            cache_write_input_tokens: input_tokens_details.cache_write_tokens,
+            cached_input_tokens: input_tokens_details.cached_tokens.unwrap_or(0),
+            cache_write_input_tokens: input_tokens_details.cache_write_tokens.unwrap_or(0),
             output_tokens: val.output_tokens,
             reasoning_output_tokens: val
                 .output_tokens_details
-                .map(|d| d.reasoning_tokens)
+                .and_then(|d| d.reasoning_tokens)
                 .unwrap_or(0),
             total_tokens: val.total_tokens,
             codex_rollout_budget_units: val.codex_rollout_budget_units,
@@ -155,14 +156,16 @@ impl From<ResponseCompletedUsage> for TokenUsage {
 
 #[derive(Debug, Default, Deserialize)]
 struct ResponseCompletedInputTokensDetails {
-    cached_tokens: i64,
     #[serde(default)]
-    cache_write_tokens: i64,
+    cached_tokens: Option<i64>,
+    #[serde(default)]
+    cache_write_tokens: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
 struct ResponseCompletedOutputTokensDetails {
-    reasoning_tokens: i64,
+    #[serde(default)]
+    reasoning_tokens: Option<i64>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -172,10 +175,10 @@ pub struct ResponsesStreamEvent {
     pub(crate) headers: Option<Value>,
     metadata: Option<Value>,
     response: Option<Value>,
-    item: Option<Value>,
-    item_id: Option<String>,
+    pub(super) item: Option<Value>,
+    pub(super) item_id: Option<String>,
     call_id: Option<String>,
-    delta: Option<String>,
+    pub(super) delta: Option<String>,
     text: Option<String>,
     summary_index: Option<i64>,
     content_index: Option<i64>,
@@ -489,10 +492,13 @@ pub fn process_responses_event(
         }
         "response.completed" => {
             if let Some(resp_val) = event.response {
-                let metadata = resp_val
+                let mut metadata = resp_val
                     .get("usage")
                     .filter(|usage| !usage.is_null())
                     .cloned();
+                if let Some(metadata) = metadata.as_mut() {
+                    remove_null_usage_detail_counters(metadata);
+                }
                 match serde_json::from_value::<ResponseCompleted>(resp_val) {
                     Ok(mut resp) => {
                         if let Some(metadata) = metadata {
@@ -555,6 +561,17 @@ pub fn process_responses_event(
     Ok(None)
 }
 
+fn remove_null_usage_detail_counters(usage: &mut Value) {
+    let Some(usage) = usage.as_object_mut() else {
+        return;
+    };
+    for detail_name in ["input_tokens_details", "output_tokens_details"] {
+        if let Some(Value::Object(details)) = usage.get_mut(detail_name) {
+            details.retain(|_, value| !value.is_null());
+        }
+    }
+}
+
 #[cfg(test)]
 pub async fn process_sse(
     stream: ByteStream,
@@ -582,6 +599,7 @@ async fn process_sse_with_treatment(
     let mut stream = stream.eventsource();
     let mut response_error: Option<ApiError> = None;
     let mut last_server_model: Option<String> = None;
+    let mut message_reconstructor = CompletedMessageReconstructor::default();
 
     loop {
         let start = Instant::now();
@@ -617,7 +635,7 @@ async fn process_sse_with_treatment(
 
         trace!("SSE event: {}", &sse.data);
 
-        let event: ResponsesStreamEvent = match serde_json::from_str(&sse.data) {
+        let mut event: ResponsesStreamEvent = match serde_json::from_str(&sse.data) {
             Ok(event) => event,
             Err(e) => {
                 debug!(
@@ -669,6 +687,15 @@ async fn process_sse_with_treatment(
                 .is_err()
         {
             return;
+        }
+        for item in message_reconstructor.observe(&mut event) {
+            if tx_event
+                .send(Ok(ResponseEvent::OutputItemDone(item)))
+                .await
+                .is_err()
+            {
+                return;
+            }
         }
 
         match process_responses_event(event) {
@@ -1433,6 +1460,101 @@ mod tests {
                 other => panic!("unexpected events: {other:?}"),
             }
         }
+    }
+
+    #[tokio::test]
+    async fn reconstructs_completed_message_text_and_tolerates_null_usage_counters() {
+        let events = run_sse(vec![
+            json!({
+                "type": "response.output_item.added",
+                "item": {
+                    "type": "message",
+                    "id": "msg_123",
+                    "role": "assistant",
+                    "content": []
+                }
+            }),
+            json!({
+                "type": "response.output_text.delta",
+                "delta": "hello "
+            }),
+            json!({
+                "type": "response.output_text.delta",
+                "delta": "world"
+            }),
+            json!({
+                "type": "response.output_item.done",
+                "item": {
+                    "type": "message",
+                    "id": "msg_123",
+                    "role": "assistant",
+                    "content": []
+                }
+            }),
+            json!({
+                "type": "response.completed",
+                "response": {
+                    "id": "resp_123",
+                    "usage": {
+                        "input_tokens": 1,
+                        "input_tokens_details": {
+                            "cached_tokens": null,
+                            "cache_write_tokens": null
+                        },
+                        "output_tokens": 2,
+                        "output_tokens_details": {"reasoning_tokens": null},
+                        "total_tokens": 3
+                    }
+                }
+            }),
+        ])
+        .await;
+
+        let completed_message = events.iter().find_map(|event| match event {
+            ResponseEvent::OutputItemDone(item @ ResponseItem::Message { .. }) => Some(item),
+            _ => None,
+        });
+        assert_eq!(
+            completed_message,
+            Some(
+                &serde_json::from_value::<ResponseItem>(json!({
+                    "type": "message",
+                    "id": "msg_123",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "hello world"}]
+                }))
+                .expect("expected message")
+            )
+        );
+        let completed = events
+            .iter()
+            .find_map(|event| match event {
+                ResponseEvent::Completed {
+                    token_usage,
+                    usage_metadata,
+                    ..
+                } => Some((
+                    token_usage,
+                    usage_metadata
+                        .as_ref()
+                        .and_then(|metadata| metadata.metadata.as_ref()),
+                )),
+                _ => None,
+            })
+            .expect("completed response");
+        let token_usage = completed.0.as_ref().expect("token usage");
+        assert_eq!(token_usage.cached_input_tokens, 0);
+        assert_eq!(token_usage.reasoning_output_tokens, 0);
+        assert_eq!(
+            completed.1,
+            Some(&json!({
+                "input_tokens": 1,
+                "input_tokens_details": {},
+                "output_tokens": 2,
+                "output_tokens_details": {},
+                "total_tokens": 3
+            }))
+        );
     }
 
     #[tokio::test]

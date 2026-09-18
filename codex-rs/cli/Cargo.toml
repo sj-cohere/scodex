@@ -4,10 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 build = "build.rs"
-default-run = "codex"
+default-run = "scodex"
 
 [[bin]]
-name = "codex"
+name = "scodex"
 path = "src/main.rs"
 
 [[bin]]
@@ -73,6 +73,7 @@ codex-terminal-detection = { workspace = true }
 codex-thread-store = { workspace = true }
 codex-tui = { workspace = true }
 codex-utils-absolute-path = { workspace = true }
+codex-utils-home-dir = { workspace = true }
 codex-utils-path = { workspace = true }
 codex-utils-path-uri = { workspace = true }
 crossterm = { workspace = true, features = ["event-stream"] }

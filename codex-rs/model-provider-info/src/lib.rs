@@ -68,8 +68,11 @@ const MAX_STREAM_MAX_RETRIES: u64 = 100;
 const MAX_REQUEST_MAX_RETRIES: u64 = 100;
 
 const OPENAI_PROVIDER_NAME: &str = "OpenAI";
+const ACP_PROVIDER_NAME: &str = "ACP";
 const OPENAI_ACTOR_AUTHORIZATION_HEADER: &str = "x-openai-actor-authorization";
 pub const OPENAI_PROVIDER_ID: &str = "openai";
+pub const ACP_PROVIDER_ID: &str = "acp";
+pub const ACP_PROD_BASE_URL: &str = "https://llm-gateway-acp-prod.tail5566.ts.net/v1";
 pub const CHATGPT_CODEX_BASE_URL: &str = "https://chatgpt.com/backend-api/codex";
 const AMAZON_BEDROCK_PROVIDER_NAME: &str = "Amazon Bedrock";
 pub const AMAZON_BEDROCK_PROVIDER_ID: &str = "amazon-bedrock";
@@ -535,6 +538,29 @@ other non-default provider fields are not supported"
         }
     }
 
+    pub fn create_acp_provider() -> ModelProviderInfo {
+        ModelProviderInfo {
+            name: ACP_PROVIDER_NAME.into(),
+            base_url: Some(ACP_PROD_BASE_URL.into()),
+            env_key: None,
+            env_key_instructions: None,
+            experimental_bearer_token: None,
+            auth: None,
+            aws: None,
+            wire_api: WireApi::Responses,
+            query_params: None,
+            http_headers: None,
+            env_http_headers: None,
+            request_max_retries: None,
+            stream_max_retries: None,
+            stream_idle_timeout_ms: None,
+            websocket_connect_timeout_ms: None,
+            requires_openai_auth: false,
+            supports_websockets: false,
+            supports_standalone_web_search: false,
+        }
+    }
+
     pub fn create_amazon_bedrock_provider(
         aws: Option<ModelProviderAwsAuthInfo>,
     ) -> ModelProviderInfo {
@@ -584,6 +610,10 @@ other non-default provider fields are not supported"
         self.name == OPENAI_PROVIDER_NAME
     }
 
+    pub fn is_acp(&self) -> bool {
+        self.name == ACP_PROVIDER_NAME
+    }
+
     pub fn supports_codex_backend_routes(&self) -> bool {
         self.is_openai()
             && self.base_url.as_deref().is_none_or(|base_url| {
@@ -629,6 +659,7 @@ pub fn built_in_model_providers(
 ) -> HashMap<String, ModelProviderInfo> {
     use ModelProviderInfo as P;
     let openai_provider = P::create_openai_provider(openai_base_url);
+    let acp_provider = P::create_acp_provider();
     let amazon_bedrock_provider = P::create_amazon_bedrock_provider(/*aws*/ None);
     let amazon_bedrock_runtime_provider =
         P::create_amazon_bedrock_runtime_provider(/*aws*/ None);
@@ -638,6 +669,7 @@ pub fn built_in_model_providers(
     // open source ("oss") providers by default. Users are encouraged to add to
     // `model_providers` in config.toml to add their own providers.
     [
+        (ACP_PROVIDER_ID, acp_provider),
         (OPENAI_PROVIDER_ID, openai_provider),
         (AMAZON_BEDROCK_PROVIDER_ID, amazon_bedrock_provider),
         (

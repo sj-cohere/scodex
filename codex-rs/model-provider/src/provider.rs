@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use codex_api::ApiError;
 use codex_api::Provider;
+use codex_api::ResponsesApiRequest;
 use codex_api::SharedAuthProvider;
 use codex_api::TransportError;
 use codex_api::is_azure_responses_provider;
@@ -23,6 +24,7 @@ use codex_protocol::error::CodexErr;
 use codex_protocol::openai_models::ModelsResponse;
 
 use crate::ResolvedResponsesProvider;
+use crate::acp::AcpModelProvider;
 use crate::amazon_bedrock::AmazonBedrockModelProvider;
 use crate::auth::ProviderAuthScope;
 use crate::auth::ResolvedProviderAuth;
@@ -213,6 +215,15 @@ pub trait ModelProvider: fmt::Debug + Send + Sync {
         codex_api::map_api_error(error)
     }
 
+    /// Applies provider-specific routing and compatibility changes immediately before sending.
+    fn prepare_responses_request(
+        &self,
+        _request: &mut ResponsesApiRequest,
+        _provider: &mut Provider,
+    ) -> codex_protocol::error::Result<()> {
+        Ok(())
+    }
+
     /// Returns provider configuration adapted for the API client.
     fn api_provider(&self) -> ModelProviderFuture<'_, codex_protocol::error::Result<Provider>> {
         Box::pin(async move {
@@ -351,7 +362,9 @@ pub fn create_model_provider(
     provider_info: ModelProviderInfo,
     auth_manager: Option<Arc<AuthManager>>,
 ) -> SharedModelProvider {
-    if provider_info.is_amazon_bedrock() {
+    if provider_info.is_acp() {
+        Arc::new(AcpModelProvider::new(provider_info))
+    } else if provider_info.is_amazon_bedrock() {
         Arc::new(AmazonBedrockModelProvider::new(provider_info, auth_manager))
     } else {
         Arc::new(ConfiguredModelProvider::new(provider_info, auth_manager))

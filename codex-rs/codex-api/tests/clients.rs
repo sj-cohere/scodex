@@ -349,7 +349,7 @@ async fn responses_client_stream_request_preserves_item_ids() -> Result<()> {
         }],
         tools: Some(empty_tools().into()),
         tool_choice: "auto".into(),
-        parallel_tool_calls: false,
+        parallel_tool_calls: Some(false),
         reasoning: None,
         store: false,
         stream: true,
@@ -360,6 +360,7 @@ async fn responses_client_stream_request_preserves_item_ids() -> Result<()> {
         text: None,
         client_metadata: None,
         access_programs: None,
+        max_output_tokens: None,
     };
     let expected = serde_json::to_value(&request)?;
 
@@ -437,7 +438,7 @@ async fn streaming_client_retries_on_transport_error() -> Result<()> {
         input: Vec::new(),
         tools: Some(empty_tools().into()),
         tool_choice: "auto".into(),
-        parallel_tool_calls: false,
+        parallel_tool_calls: Some(false),
         reasoning: None,
         store: false,
         stream: true,
@@ -448,6 +449,7 @@ async fn streaming_client_retries_on_transport_error() -> Result<()> {
         text: None,
         client_metadata: None,
         access_programs: None,
+        max_output_tokens: None,
     };
     let client = ResponsesClient::new(transport.clone(), provider, Arc::new(NoAuth));
 
@@ -558,7 +560,7 @@ async fn azure_store_sends_ids_and_headers() -> Result<()> {
         }],
         tools: Some(empty_tools().into()),
         tool_choice: "auto".into(),
-        parallel_tool_calls: false,
+        parallel_tool_calls: Some(false),
         reasoning: None,
         store: true,
         stream: true,
@@ -569,6 +571,7 @@ async fn azure_store_sends_ids_and_headers() -> Result<()> {
         text: None,
         client_metadata: None,
         access_programs: None,
+        max_output_tokens: None,
     };
 
     let mut extra_headers = HeaderMap::new();

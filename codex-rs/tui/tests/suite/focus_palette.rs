@@ -197,7 +197,7 @@ impl PtyCodex {
         let stdout = slave.try_clone().context("clone pseudo-terminal stdout")?;
 
         let codex = codex_utils_cargo_bin::cargo_bin("codex-tui")
-            .or_else(|_| codex_utils_cargo_bin::cargo_bin("codex"))?;
+            .or_else(|_| codex_utils_cargo_bin::cargo_bin("scodex"))?;
         let child = Command::new(codex)
             .args(extra_args)
             .arg("--no-alt-screen")

@@ -137,12 +137,12 @@ impl AppExitInfo {
             lines.push("To continue this session, run:".to_string());
             lines.push(format!(
                 "  {}",
-                color_command(format!("codex resume {}", thread.thread_id)),
+                color_command(format!("scodex resume {}", thread.thread_id)),
             ));
             if let Some(thread_name) = thread.thread_name.filter(|name| !name.is_empty()) {
                 lines.push(format!(
                     "Or run {} and select {}.",
-                    color_command("codex resume".to_string()),
+                    color_command("scodex resume".to_string()),
                     color_command(thread_name),
                 ));
             }

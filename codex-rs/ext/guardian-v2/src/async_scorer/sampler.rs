@@ -219,7 +219,7 @@ impl LunaSampler {
             input,
             tools: None,
             tool_choice: "none".to_owned(),
-            parallel_tool_calls: false,
+            parallel_tool_calls: Some(false),
             reasoning: Some(Reasoning {
                 effort: Some(request.reasoning_effort),
                 summary: None,
@@ -234,6 +234,7 @@ impl LunaSampler {
             text: None,
             client_metadata: None,
             access_programs: None,
+            max_output_tokens: None,
         };
         let (supersede, superseded) = oneshot::channel();
         let scored = Arc::new(AtomicBool::new(false));

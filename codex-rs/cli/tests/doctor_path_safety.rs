@@ -36,7 +36,7 @@ impl Fixture {
         let program = root
             .path()
             .join(format!("codex{}", std::env::consts::EXE_SUFFIX));
-        let source = codex_utils_cargo_bin::cargo_bin("codex")?;
+        let source = codex_utils_cargo_bin::cargo_bin("scodex")?;
         if std::fs::hard_link(&source, &program).is_err() {
             std::fs::copy(&source, &program)?;
         }

@@ -1,3 +1,4 @@
+mod acp;
 mod amazon_bedrock;
 mod auth;
 mod bearer_auth_provider;

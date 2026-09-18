@@ -14,12 +14,12 @@ const require = createRequire(import.meta.url);
 const codexPackageRoot = realpathSync(path.join(__dirname, ".."));
 
 const PLATFORM_PACKAGE_BY_TARGET = {
-  "x86_64-unknown-linux-musl": "@openai/codex-linux-x64",
-  "aarch64-unknown-linux-musl": "@openai/codex-linux-arm64",
-  "x86_64-apple-darwin": "@openai/codex-darwin-x64",
-  "aarch64-apple-darwin": "@openai/codex-darwin-arm64",
-  "x86_64-pc-windows-msvc": "@openai/codex-win32-x64",
-  "aarch64-pc-windows-msvc": "@openai/codex-win32-arm64",
+  "x86_64-unknown-linux-musl": "@sj-cohere/scodex-linux-x64",
+  "aarch64-unknown-linux-musl": "@sj-cohere/scodex-linux-arm64",
+  "x86_64-apple-darwin": "@sj-cohere/scodex-darwin-x64",
+  "aarch64-apple-darwin": "@sj-cohere/scodex-darwin-arm64",
+  "x86_64-pc-windows-msvc": "@sj-cohere/scodex-win32-x64",
+  "aarch64-pc-windows-msvc": "@sj-cohere/scodex-win32-arm64",
 };
 
 const { platform, arch } = process;
@@ -71,12 +71,8 @@ if (!targetTriple) {
   throw new Error(`Unsupported platform: ${platform} (${arch})`);
 }
 
-const platformPackage = PLATFORM_PACKAGE_BY_TARGET[targetTriple];
-if (!platformPackage) {
-  throw new Error(`Unsupported target triple: ${targetTriple}`);
-}
-
 function findCodexExecutable() {
+  const platformPackage = PLATFORM_PACKAGE_BY_TARGET[targetTriple];
   let vendorRoot;
   try {
     const packageJsonPath = require.resolve(`${platformPackage}/package.json`);
@@ -89,23 +85,14 @@ function findCodexExecutable() {
     vendorRoot,
     targetTriple,
     "bin",
-    process.platform === "win32" ? "codex.exe" : "codex",
+    process.platform === "win32" ? "scodex.exe" : "scodex",
   );
   if (existsSync(codexExecutable)) {
     return codexExecutable;
   }
 
-  const packageManager = detectPackageManager();
-  const updateCommand =
-    packageManager === "bun"
-      ? "bun install -g @openai/codex@latest"
-      : packageManager === "pnpm"
-        ? "pnpm add -g @openai/codex@latest"
-        : packageManager === "vite-plus"
-          ? "vp install -g @openai/codex@latest"
-          : "npm install -g @openai/codex@latest";
   throw new Error(
-    `Missing optional dependency ${platformPackage}. Reinstall Codex: ${updateCommand}`,
+    `Missing Scodex native binary for ${targetTriple}. Rebuild this package from the Scodex source tree.`,
   );
 }
 
@@ -124,7 +111,7 @@ function isPnpmOwnedCodexInstall(nodeModulesDir) {
 
   try {
     return (
-      realpathSync(path.join(nodeModulesDir, "@openai", "codex")) ===
+      realpathSync(path.join(nodeModulesDir, "@sj-cohere", "scodex")) ===
       codexPackageRoot
     );
   } catch {
@@ -139,24 +126,24 @@ function isVitePlusOwnedCodexInstall(packagesDir) {
 
   try {
     const metadata = JSON.parse(
-      readFileSync(path.join(packagesDir, "@openai", "codex.json"), "utf8"),
+      readFileSync(path.join(packagesDir, "@sj-cohere", "scodex.json"), "utf8"),
     );
-    if (metadata.name !== "@openai/codex") {
+    if (metadata.name !== "@sj-cohere/scodex") {
       return false;
     }
 
-    // Vite+ records the active global installation in packages/@openai/codex.json.
+    // Vite+ records the active global installation in packages/@sj-cohere/scodex.json.
     // Older installs have no ID or append a #-prefixed ID to the package name;
     // newer installs put the ID in a subdirectory of the package prefix.
     const installId = metadata.installId || "";
     const installDir = installId.startsWith("#")
-      ? path.join(packagesDir, `@openai/codex${installId}`)
-      : path.join(packagesDir, "@openai/codex", installId);
+      ? path.join(packagesDir, `@sj-cohere/scodex${installId}`)
+      : path.join(packagesDir, "@sj-cohere/scodex", installId);
     for (const nodeModulesDir of [
       path.join(installDir, "lib", "node_modules"),
       path.join(installDir, "node_modules"),
     ]) {
-      const packageRoot = path.join(nodeModulesDir, "@openai", "codex");
+      const packageRoot = path.join(nodeModulesDir, "@sj-cohere", "scodex");
       if (
         existsSync(packageRoot) &&
         realpathSync(packageRoot) === codexPackageRoot

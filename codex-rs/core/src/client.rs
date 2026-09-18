@@ -348,6 +348,7 @@ fn responses_request_properties_match(
         text: previous_text,
         client_metadata: _,
         access_programs: _,
+        max_output_tokens: previous_max_output_tokens,
     } = previous;
     let ResponsesApiRequest {
         model: current_model,
@@ -366,6 +367,7 @@ fn responses_request_properties_match(
         text: current_text,
         client_metadata: _,
         access_programs: _,
+        max_output_tokens: current_max_output_tokens,
     } = current;
 
     previous_model == current_model
@@ -382,6 +384,7 @@ fn responses_request_properties_match(
         && previous_service_tier == current_service_tier
         && previous_prompt_cache_key == current_prompt_cache_key
         && previous_text == current_text
+        && previous_max_output_tokens == current_max_output_tokens
 }
 
 fn response_items_equal_ignoring_internal_metadata(
@@ -960,7 +963,7 @@ impl ModelClient {
             input,
             tools,
             tool_choice: "auto".to_string(),
-            parallel_tool_calls: prompt.parallel_tool_calls && !model_info.use_responses_lite,
+            parallel_tool_calls: Some(prompt.parallel_tool_calls && !model_info.use_responses_lite),
             reasoning: Some(reasoning),
             store: false,
             stream: true,
@@ -971,6 +974,7 @@ impl ModelClient {
             text,
             client_metadata: Some(responses_metadata.client_metadata()),
             access_programs: None,
+            max_output_tokens: None,
         };
         Ok(request)
     }
@@ -996,8 +1000,9 @@ impl ModelClient {
     }
 
     fn prepare_response_items_for_request(&self, input: &mut [ResponseItem]) {
+        let preserve_response_item_ids = self.state.provider.info().is_acp();
         for item in input {
-            if item.id().is_some_and(|id| !id.is_prefixed()) {
+            if !preserve_response_item_ids && item.id().is_some_and(|id| !id.is_prefixed()) {
                 item.set_id(/*new_id*/ None);
             }
             if !self.state.content_item_kinds_enabled {
@@ -1616,7 +1621,7 @@ impl ModelClientSession {
         let mut provider_auth_recovery_attempted = false;
         let mut pending_retry = PendingUnauthorizedRetry::default();
         loop {
-            let client_setup = self
+            let mut client_setup = self
                 .client
                 .current_client_setup(ClientRouting::Workspace)
                 .await?;
@@ -1624,11 +1629,6 @@ impl ModelClientSession {
                 .client
                 .responses_headers(client_setup.auth.as_ref(), &model_info.slug);
             tracing::Span::current().record("api.path", "/responses");
-            let transport = self.client.build_api_transport(
-                &client_setup.api_provider,
-                "/responses",
-                client_setup.redirect_policy,
-            )?;
             let request_auth_context = AuthRequestTelemetryContext::new(
                 client_setup.auth.as_ref().map(CodexAuth::auth_mode),
                 client_setup.api_auth.as_ref(),
@@ -1657,6 +1657,15 @@ impl ModelClientSession {
                 summary,
                 service_tier.clone(),
                 responses_metadata,
+            )?;
+            self.client
+                .state
+                .provider
+                .prepare_responses_request(&mut request, &mut client_setup.api_provider)?;
+            let transport = self.client.build_api_transport(
+                &client_setup.api_provider,
+                "/responses",
+                client_setup.redirect_policy,
             )?;
             ModelClient::filter_tool_result_metadata(
                 &mut request.input,
@@ -1798,7 +1807,7 @@ impl ModelClientSession {
         let mut provider_auth_recovery_attempted = false;
         let mut pending_retry = PendingUnauthorizedRetry::default();
         loop {
-            let client_setup = self
+            let mut client_setup = self
                 .client
                 .current_client_setup(ClientRouting::Workspace)
                 .await?;
@@ -1820,6 +1829,10 @@ impl ModelClientSession {
                 service_tier.clone(),
                 responses_metadata,
             )?;
+            self.client
+                .state
+                .provider
+                .prepare_responses_request(&mut request, &mut client_setup.api_provider)?;
             ModelClient::filter_tool_result_metadata(
                 &mut request.input,
                 &client_setup.api_provider,

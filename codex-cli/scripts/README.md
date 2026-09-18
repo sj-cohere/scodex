@@ -15,7 +15,7 @@ This downloads the required native package archive artifacts, hydrates `vendor/`
 each package, and writes tarballs to `dist/npm/`.
 
 When `--package codex` is provided, the staging helper builds the lightweight
-`@openai/codex` meta package plus all platform-native `@openai/codex` variants
+`@sj-cohere/scodex` meta package plus all platform-native `@sj-cohere/scodex` variants
 that are later published under platform-specific dist-tags.
 
 Direct `build_npm_package.py` invocations are still useful for package-specific

@@ -1,3 +1,4 @@
+mod response_reconstruction;
 pub(crate) mod responses;
 
 pub(crate) use responses::ResponsesStreamEvent;

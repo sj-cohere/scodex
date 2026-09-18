@@ -1,81 +1,78 @@
-<p align="center"><strong>Codex CLI</strong> is a coding agent from OpenAI that runs locally on your computer.
-<p align="center">
-  <img src="https://github.com/openai/codex/blob/main/.github/codex-cli-splash.png" alt="Codex CLI splash" width="80%" />
-</p>
-</br>
-If you want Codex in your code editor (VS Code, Cursor, Windsurf), <a href="https://developers.openai.com/codex/ide">install in your IDE.</a>
-</br>If you want the desktop app experience, run <code>codex app</code> or visit <a href="https://chatgpt.com/codex?app-landing-page=true">the Codex App page</a>.
-</br>If you are looking for the <em>cloud-based agent</em> from OpenAI, <strong>Codex Web</strong>, go to <a href="https://chatgpt.com/codex">chatgpt.com/codex</a>.</p>
+# Scodex
 
----
+Scodex is a fork of [OpenAI Codex](https://github.com/openai/codex) configured
+for ACP inference over Tailscale. It keeps the normal Codex command-line
+options, tools, sandboxing, and approval flow while using the `scodex`
+executable and a separate default state directory.
 
-## Quickstart
+## Build and install
 
-### Installing and running Codex CLI
-
-Run the following on Mac or Linux to install Codex CLI:
+Rust 1.95 is pinned by `codex-rs/rust-toolchain.toml`.
 
 ```shell
-curl -fsSL https://chatgpt.com/codex/install.sh | sh
+cd codex-rs
+cargo build --release -p codex-cli --bin scodex
 ```
 
-Run the following on Windows to install Codex CLI:
+To install from a checkout:
 
 ```shell
-powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"
+cargo install --path codex-rs/cli --bin scodex
 ```
 
-The standalone installers download from `https://releases.openai.com/codex` by default and fall back to GitHub Releases if a metadata or asset download is unavailable. To force GitHub Releases, set `CODEX_INSTALLER_USE_RELEASES_OPENAI_COM` to `false` (`0` and `no` are also accepted):
+Run `scodex`. Unless `CODEX_HOME` is explicitly set, configuration, history,
+credentials, logs, and caches live under `~/.scodex`; standard Codex state in
+`~/.codex` is not used.
 
-```shell
-curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_INSTALLER_USE_RELEASES_OPENAI_COM=false sh
+## ACP routing
+
+Scodex uses the Responses HTTP/SSE transport without OpenAI authentication,
+WebSockets, model substitution, or the local Responses proxy. Access to the
+Tailscale hostnames is required.
+
+- `acp-gpt-6-astra` routes to
+  `https://llm-gateway-acp-dev.tail5566.ts.net/v1/responses` as
+  `gpt-6-astra`.
+- Every other allowed picker ID routes to
+  `https://llm-gateway-acp-prod.tail5566.ts.net/v1/responses` after exactly one
+  leading `acp-` is removed.
+- Both gateways' `/v1/models` endpoints refresh the picker. Only the configured
+  allowlist is exposed; an unknown model is rejected rather than replaced.
+
+The allowed picker IDs are:
+
+```text
+acp-gpt-6-astra
+acp-command-bls-nightly-previous
+acp-command-a-plus-05-2026
+acp-command-bls-nightly
+acp-north-mini-code-1-0
+acp-claude-sonnet-4-5
+acp-claude-opus-4-6
+acp-claude-sonnet-5
+acp-claude-opus-4-8
+acp-claude-opus-5
+acp-gpt-5.6-terra
+acp-gpt-5.6-luna
+acp-gpt-5.6-sol
+acp-gpt-5.5
+acp-gemma-4-31b
 ```
 
-```powershell
-$env:CODEX_INSTALLER_USE_RELEASES_OPENAI_COM='false'; irm https://chatgpt.com/codex/install.ps1 | iex
-```
+`acp-gpt-6-astra` is the default. It advertises exactly
+`low`, `medium`, `high`, `xhigh`, and `max` reasoning effort, with `medium` as
+the default. Scodex forwards the selected effort unchanged and defaults ACP
+requests to 16,384 output tokens. No reasoning choices are inferred for the
+other models.
 
-Codex CLI can also be installed via the following package managers:
+Model discovery confirms catalog visibility only. Inference permission is
+checked separately by sending a request; failures are surfaced without
+falling back to another model.
 
-```shell
-# Install using npm
-npm install -g @openai/codex
-```
+## Upstream
 
-```shell
-# Install using Homebrew
-brew install --cask codex
-```
-
-Then simply run `codex` to get started.
-
-<details>
-<summary>You can also go to the <a href="https://github.com/openai/codex/releases/latest">latest GitHub Release</a> and download the appropriate binary for your platform.</summary>
-
-Each GitHub Release contains many executables, but in practice, you likely want one of these:
-
-- macOS
-  - Apple Silicon/arm64: `codex-aarch64-apple-darwin.tar.gz`
-  - x86_64 (older Mac hardware): `codex-x86_64-apple-darwin.tar.gz`
-- Linux
-  - x86_64: `codex-x86_64-unknown-linux-musl.tar.gz`
-  - arm64: `codex-aarch64-unknown-linux-musl.tar.gz`
-
-Each archive contains a single entry with the platform baked into the name (e.g., `codex-x86_64-unknown-linux-musl`), so you likely want to rename it to `codex` after extracting it.
-
-</details>
-
-### Using Codex with your ChatGPT plan
-
-Run `codex` and select **Sign in with ChatGPT**. We recommend signing into your ChatGPT account to use Codex as part of your Plus, Pro, Business, Edu, or Enterprise plan. [Learn more about what's included in your ChatGPT plan](https://help.openai.com/en/articles/11369540-codex-in-chatgpt).
-
-You can also use Codex with an API key, but this requires [additional setup](https://developers.openai.com/codex/auth#sign-in-with-an-api-key).
-
-## Docs
-
-- [**Codex Documentation**](https://developers.openai.com/codex)
-- [**Contributing**](./docs/contributing.md)
-- [**Installing & building**](./docs/install.md)
-- [**Open source fund**](./docs/open-source-fund.md)
+General Codex architecture and development guidance remains in the upstream
+[documentation](https://developers.openai.com/codex) and this repository's
+[contributing guide](./docs/contributing.md).
 
 This repository is licensed under the [Apache-2.0 License](LICENSE).

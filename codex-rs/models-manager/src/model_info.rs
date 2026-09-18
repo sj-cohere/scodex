@@ -98,6 +98,11 @@ fn is_h1_heading(line: &str) -> bool {
 /// Build a minimal fallback model descriptor for missing/unknown slugs.
 pub fn model_info_from_slug(slug: &str) -> ModelInfo {
     warn!("Unknown model {slug} is used. This will use fallback model metadata.");
+    model_info_for_custom_provider(slug)
+}
+
+/// Build conservative metadata for a model supplied by a custom provider.
+pub fn model_info_for_custom_provider(slug: &str) -> ModelInfo {
     ModelInfo {
         slug: slug.to_string(),
         display_name: slug.to_string(),
